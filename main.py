@@ -1,36 +1,66 @@
+from model.Discriminator import Discriminator
+from model.Generator import Generator
 from model.GAN import GAN
 import torch
-from torchvision import datasets, transforms
-from PIL import Image
+import os
+import PIL.Image as Image
+import torchvision.transforms as transforms
+import torchvision.utils
 
-#get data from data folder
-def data_loader():
-    transform = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=(0.5,), std=(0.5,))])
-    train_dataset = datasets.MNIST(root='./data/', train=True, transform=transform, download=True)
-    train_loader = torch.utils.data.DataLoader(dataset=train_dataset, batch_size=100, shuffle=True)
-    return train_loader
+#define data path
+class ImageDataset(torch.utils.data.Dataset):
+    def __init__(self, root, transform=None):
+        self.root = root
+        self.transform = transform
+        self.imgs = os.listdir(root)
 
-#train the model
-def train():
-    data_loader_ = data_loader()
-    gan = GAN()
-    gan.train(data_loader_)
-    torch.save(gan.generator.state_dict(), 'generator.pkl')
-    torch.save(gan.discriminator.state_dict(), 'discriminator.pkl')
+    def __getitem__(self, index):
+        img_path = os.path.join(self.root, self.imgs[index])
+        img = Image.open(img_path).convert('RGB')
+        if self.transform is not None:
+            img = self.transform(img)
+        return img
 
-#generate images
-def generate():
-    gan = GAN()
-    gan.generator.load_state_dict(torch.load('generator.pkl'))
-    fake_images = gan.generate(1)
-    fake_images = fake_images.view(1, 28, 28)
-    #save image
-    img = transforms.ToPILImage()(fake_images)
-    img.save('fake_images.png')
+    def __len__(self):
+        return len(os.listdir(self.root))
     
+transform = transforms.Compose([
+    transforms.Resize((64, 64)),
+    transforms.ToTensor(),
+    transforms.Normalize((0.5,), (0.5,))
+])
 
-#main function
-if __name__ == '__main__':
-    train()
-    generate()
+dataset_name = 'data/img_align_celeba'
+dataloader = torch.utils.data.DataLoader(ImageDataset(dataset_name, transform=transform), batch_size=64, shuffle=True)
+
+
+# define model
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+G = Generator().to(device)
+D = Discriminator().to(device)
+gan = GAN(G, D, device)
+
+# train model
+gan.train(dataloader, epochs=5, batch_size=64, sample_interval=400)
+
+#save model
+torch.save(G.state_dict(), 'G.pth')
+torch.save(D.state_dict(), 'D.pth')
+
+#load model
+G = Generator().to(device)
+D = Discriminator().to(device)
+G.load_state_dict(torch.load('G.pth'))
+D.load_state_dict(torch.load('D.pth'))
+
+
+# inpainting image from input folder
+for i in range(10):
+    img = Image.open('input/{}.jpg'.format(i)).convert('RGB')
+    img = transform(img)
+    img = img.unsqueeze(0).to(device)
+    z = torch.randn(1, 100, 1, 1).to(device)
+    fake_img = G(z)
+    fake_img = fake_img.cpu().data
+    torchvision.utils.save_image(fake_img, 'output/{}.jpg'.format(i), normalize=True)
 

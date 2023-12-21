@@ -1,23 +1,24 @@
 import torch
 
 class Discriminator(torch.nn.Module):
-    def __init__(self):
+    def __init__(self, channels=3):
         super(Discriminator, self).__init__()
-        self.model = torch.nn.Sequential(
-            torch.nn.Linear(784, 1024),
-            torch.nn.LeakyReLU(0.2),
-            torch.nn.Dropout(0.3),
-            torch.nn.Linear(1024, 512),
-            torch.nn.LeakyReLU(0.2),
-            torch.nn.Dropout(0.3),
-            torch.nn.Linear(512, 256),
-            torch.nn.LeakyReLU(0.2),
-            torch.nn.Dropout(0.3),
-            torch.nn.Linear(256, 1),
-            torch.nn.Sigmoid()
-        )
+        def discriminator_block(in_filters, out_filters, stride, normalize):
+            layers = [torch.nn.Conv2d(in_filters, out_filters, 3, stride, 1)]
+            if normalize:
+                layers.append(torch.nn.BatchNorm2d(out_filters))
+            layers.append(torch.nn.LeakyReLU(0.2, inplace=True))
+            return layers
+        
+        layers = []
+        in_filters = channels
+        for out_filters, stride, normalize in [(64, 2, False), (128, 2, True), (256, 2, True), (512, 1, True)]:
+            layers.extend(discriminator_block(in_filters, out_filters, stride, normalize))
+            in_filters = out_filters
 
-    def forward(self, x):
-        x = x.view(x.size(0), 784)
-        output = self.model(x)
-        return output
+        layers.append(torch.nn.Conv2d(out_filters, 1, 3, 1, 1))
+        self.model = torch.nn.Sequential(*layers)
+
+    def forward(self, img):
+        validity = self.model(img)
+        return validity
