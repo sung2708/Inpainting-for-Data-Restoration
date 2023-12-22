@@ -1,39 +1,29 @@
 import torch.nn as nn
-
 class Generator(nn.Module):
-    def __init__(self, channels=3):
-        super(Generator, self).__init__()
+  def __init__(self):
+    super(Generator, self).__init__()
+    self.main = nn.Sequential(
+        nn.ConvTranspose2d(100, 1024, kernel_size = 4, stride = 1, padding = 0, bias = False),
+        nn.BatchNorm2d(1024),
+        nn.ReLU(inplace = True),
 
-        def downsample(in_feat, out_feat, normalize=True):
-            layers = [nn.Conv2d(in_feat, out_feat, 4, stride=2, padding=1)]
-            if normalize:
-                layers.append(nn.BatchNorm2d(out_feat, 0.8))
-            layers.append(nn.LeakyReLU(0.2))
-            return layers
+        nn.ConvTranspose2d(1024, 512, kernel_size = 4, stride = 2, padding = 1, bias =False),
+        nn.BatchNorm2d(512),
+        nn.ReLU(inplace = True),
 
-        def upsample(in_feat, out_feat, normalize=True):
-            layers = [nn.ConvTranspose2d(in_feat, out_feat, 4, stride=2, padding=1)]
-            if normalize:
-                layers.append(nn.BatchNorm2d(out_feat, 0.8))
-            layers.append(nn.ReLU())
-            return layers
+        nn.ConvTranspose2d(512, 256, kernel_size = 4, stride = 2, padding = 1, bias=False),
+        nn.BatchNorm2d(256),
+        nn.ReLU(inplace = True),
 
-        self.model = nn.Sequential(
-            *downsample(channels, 64, normalize=False),
-            *downsample(64, 64),
-            *downsample(64, 128),
-            *downsample(128, 256),
-            *downsample(256, 512),
-            nn.Conv2d(512, 4000, 1),
-            *upsample(4000, 512),
-            *upsample(512, 256),
-            *upsample(256, 128),
-            *upsample(128, 64),
-            nn.Conv2d(64, channels, 3, 1, 1),
-            nn.Tanh()
-        )
+        nn.ConvTranspose2d(256, 128, kernel_size = 4, stride = 2, padding = 1, bias=False),
+        nn.BatchNorm2d(128),
+        nn.ReLU(inplace = True),
 
-    def forward(self, x):
-        return self.model(x)
+        nn.ConvTranspose2d(128, 3, kernel_size = 4, stride = 2, padding = 1, bias=False),
+        nn.Tanh()
+    )
+    
 
-
+  def forward(self, x):
+    x = self.main(x)
+    return x
